@@ -1,13 +1,11 @@
 use crate::utils::copy_and_hash;
 use crate::utils::BackupsFolder;
-use crate::utils::TempFolder;
 use crate::Command;
 use anyhow::{Error, Result};
 use chrono::{Datelike, Timelike, Utc};
 use clap::ArgMatches;
 use flate2::write::GzEncoder;
 use flate2::Compression;
-use std::env::current_dir;
 use std::fs::File;
 use tar::Builder;
 
@@ -41,18 +39,7 @@ impl Command for Backup {
             return Err(Error::msg("A backup with this name already exists"));
         }
 
-        println!("Creating temporary folder");
-
-        let temp_folder = TempFolder::new()?;
-        let temp_folder_dir = temp_folder.dir();
-
-        println!("{:?}", temp_folder_dir);
-
-        println!("Copying and hashing files");
-
-        copy_and_hash(&mc_dir, &temp_folder_dir)?;
-
-        println!("Archiving backup");
+        println!("Copying, hashing, and compressing files");
 
         let archive_file = File::create(new_backup_path)?;
 
@@ -60,7 +47,7 @@ impl Command for Backup {
 
         {
             let mut archive = Builder::new(&mut encoder);
-            archive.append_dir_all("", &temp_folder.dir())?;
+            copy_and_hash(&mc_dir, &mut archive)?;
         }
 
         encoder.finish()?;
