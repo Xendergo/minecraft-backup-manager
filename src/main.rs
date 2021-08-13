@@ -1,14 +1,16 @@
 mod backup;
 mod root;
 mod subcommand;
+mod utils;
 
 #[macro_use]
 extern crate clap;
+use anyhow::Result;
 use clap::AppSettings;
 use root::Root;
 use subcommand::Command;
 
-fn main() {
+fn main() -> Result<()> {
     let args = clap_app!(("Minecraft backup manager") =>
         (version: crate_version!())
         (author: "Xendergo")
