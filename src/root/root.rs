@@ -1,17 +1,31 @@
 use crate::backup::Backup;
+use crate::run_command;
 use crate::subcommand::Command;
 use anyhow::Result;
 use clap::ArgMatches;
 
 pub struct Root();
 
-impl Command for Root {
-    fn run_command(args: ArgMatches) -> Result<()> {
-        let subcommand = args.subcommand.unwrap();
-        let name: &str = &subcommand.name;
+pub struct RootArgs<'a> {
+    name: String,
+    matches: ArgMatches<'a>,
+}
 
-        match name {
-            "backup" => Backup::run_command(subcommand.matches)?,
+impl<'a> Command<'a> for Root {
+    type ArgsType = RootArgs<'a>;
+
+    fn parse_args(args: ArgMatches<'a>) -> Result<Self::ArgsType> {
+        let subcommand = args.subcommand.unwrap();
+
+        Ok(RootArgs {
+            name: subcommand.name,
+            matches: subcommand.matches,
+        })
+    }
+
+    fn run_command(args: Self::ArgsType) -> Result<()> {
+        match &args.name[..] {
+            "backup" => run_command::<Backup>(args.matches)?,
             _ => unreachable!(),
         };
 

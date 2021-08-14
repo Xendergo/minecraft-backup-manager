@@ -5,6 +5,7 @@ mod utils;
 
 #[macro_use]
 extern crate clap;
+use crate::subcommand::run_command;
 use anyhow::Result;
 use clap::AppSettings;
 use root::Root;
@@ -19,9 +20,10 @@ fn main() -> Result<()> {
         (@subcommand backup =>
             (about: "Backup your world")
             (@arg name: -n --name +takes_value "The name of the backup")
+            (@arg type: -t --type +takes_value "`full` | `partial`\nwhether the backup should take a backup of all the files or only the ones that have changed.\nUsing `partial` doesn't effect the ability to restore data in any way, unless previous backups are altered.")
         )
     )
     .get_matches();
 
-    Root::run_command(args)
+    run_command::<Root>(args)
 }
