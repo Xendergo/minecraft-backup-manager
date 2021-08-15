@@ -1,4 +1,4 @@
-use crate::backup::backup_writer::write_files;
+use crate::backup::backup_writer::Backup;
 use crate::utils::BackupsFolder;
 use crate::Command;
 use anyhow::{Error, Result};
@@ -11,13 +11,19 @@ use std::io::Write;
 use std::path::PathBuf;
 use tar::Builder;
 
-pub struct Backup();
+pub struct BackupCommand();
+
+enum BackupType {
+    Full,
+    Partial,
+}
 
 pub struct BackupArgs {
     name: String,
+    backup_type: BackupType,
 }
 
-impl Command<'_> for Backup {
+impl Command<'_> for BackupCommand {
     type ArgsType = BackupArgs;
 
     fn parse_args(args: ArgMatches) -> Result<Self::ArgsType> {
@@ -37,7 +43,12 @@ impl Command<'_> for Backup {
                         t.second()
                     )
                 }
-            } + ".tar",
+            } + ".tar.gz",
+            backup_type: match args.value_of("type") {
+                Some("full") => BackupType::Full,
+                Some("partial") => BackupType::Partial,
+                _ => BackupType::Partial,
+            },
         })
     }
 
@@ -59,7 +70,7 @@ impl Command<'_> for Backup {
 
         let mut encoder = GzEncoder::new(archive_file, Compression::best());
 
-        make_backup(mc_dir, &mut encoder)?;
+        make_backup(mc_dir, &mut encoder, backups, args.name)?;
 
         encoder.finish()?;
 
@@ -69,9 +80,14 @@ impl Command<'_> for Backup {
     }
 }
 
-fn make_backup(mc_dir: PathBuf, encoder: &mut impl Write) -> Result<u64> {
+fn make_backup(
+    mc_dir: PathBuf,
+    encoder: &mut impl Write,
+    backups_dir: BackupsFolder,
+    name: String,
+) -> Result<Backup> {
     let mut archive = Builder::new(encoder);
-    let hash = write_files(&mc_dir, &mut archive)?;
+    let backup = Backup::create(&mc_dir, &mut archive, backups_dir, name)?;
     archive.finish()?;
-    Ok(hash)
+    Ok(backup)
 }
