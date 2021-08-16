@@ -1,4 +1,5 @@
 mod backup;
-mod backup_writer;
+mod backup_command;
 
-pub use backup::*;
+pub use backup::Backup;
+pub use backup_command::*;

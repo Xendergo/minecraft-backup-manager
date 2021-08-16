@@ -1,93 +1,160 @@
-use crate::backup::backup_writer::Backup;
 use crate::utils::BackupsFolder;
-use crate::Command;
+use crate::utils::TempFile;
+use crate::utils::WriteNewFile;
 use anyhow::{Error, Result};
-use chrono::{Datelike, Timelike, Utc};
-use clap::ArgMatches;
-use flate2::write::GzEncoder;
-use flate2::Compression;
+use flate2::read::GzDecoder;
+use quartz_nbt::io::Flavor;
+use quartz_nbt::serde::{deserialize, serialize};
+use serde::{Deserialize, Serialize};
+use std::collections::hash_map::DefaultHasher;
+use std::fs;
 use std::fs::File;
-use std::io::Write;
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::io::{Read, Write};
 use std::path::PathBuf;
+use tar::Archive;
 use tar::Builder;
 
-pub struct BackupCommand();
-
-enum BackupType {
-    Full,
-    Partial,
+#[derive(Serialize, Deserialize, Debug)]
+struct BackupData {
+    previous: Option<PathBuf>,
+    current: PathBuf,
 }
 
-pub struct BackupArgs {
-    name: String,
-    backup_type: BackupType,
+pub struct Backup {
+    data: BackupData,
 }
 
-impl Command<'_> for BackupCommand {
-    type ArgsType = BackupArgs;
-
-    fn parse_args(args: ArgMatches) -> Result<Self::ArgsType> {
-        Ok(BackupArgs {
-            name: match args.value_of("name") {
-                Some(v) => v.to_string(),
-                None => {
-                    let t = Utc::now();
-
-                    format!(
-                        "{}-{}-{}_{}-{}-{}",
-                        t.year(),
-                        t.month(),
-                        t.day(),
-                        t.hour(),
-                        t.minute(),
-                        t.second()
-                    )
-                }
-            } + ".tar.gz",
-            backup_type: match args.value_of("type") {
-                Some("full") => BackupType::Full,
-                Some("partial") => BackupType::Partial,
-                _ => BackupType::Partial,
-            },
-        })
+impl Backup {
+    fn new(data: BackupData) -> Backup {
+        Backup { data: data }
     }
 
-    fn run_command(args: Self::ArgsType) -> Result<()> {
-        let backups = BackupsFolder::get()?;
-        let backups_dir = backups.dir();
-        let new_backup_path = backups_dir.join(&args.name);
-        let mc_dir = backups_dir.parent().unwrap().to_path_buf();
+    pub fn create(
+        from: &PathBuf,
+        archive: &mut Builder<impl Write>,
+        backups_dir: BackupsFolder,
+        name: String,
+    ) -> Result<Backup> {
+        let prev = backups_dir.current_backup()?;
 
-        println!("Storing the backup in {}", &args.name);
+        let data = BackupData {
+            previous: prev,
+            current: backups_dir.dir().join(&name),
+        };
 
-        if backups_dir.join(&args.name).is_file() {
-            return Err(Error::msg("A backup with this name already exists"));
+        archive.append_new_file(
+            "archive_data.nbt",
+            &serialize(&data, Some(""), Flavor::Uncompressed)?[..],
+        )?;
+
+        backups_dir.set_current_backup(name)?;
+
+        write_files_with_wd(from, archive, &PathBuf::from(""))?;
+
+        Ok(Backup::new(data))
+    }
+
+    pub fn get(path: PathBuf) -> Result<Backup> {
+        let mut out = Vec::new();
+
+        Archive::new(GzDecoder::new(File::open(path)?))
+            .entries()?
+            .nth(0)
+            .ok_or(Error::msg("The backup being opened is empty"))??
+            .read_to_end(&mut out)?;
+
+        let v = deserialize::<BackupData>(&out, Flavor::Uncompressed)?;
+
+        Ok(Backup::new(v.0))
+    }
+
+    pub fn get_reader(&self) -> Result<Archive<GzDecoder<File>>> {
+        Ok(Archive::new(GzDecoder::new(File::open(
+            self.data.current.clone(),
+        )?)))
+    }
+
+    // pub fn backup_iterator(&self) -> BackupIterator {}
+}
+
+fn write_files_with_wd(
+    from_root: &PathBuf,
+    archive: &mut Builder<impl Write>,
+    cwd: &PathBuf,
+) -> Result<u64> {
+    let from = &from_root.join(cwd);
+
+    let mut hasher = DefaultHasher::new();
+
+    cwd.hash(&mut hasher);
+
+    if from.is_dir() {
+        // if cwd != &PathBuf::from("") {
+        //     archive.append_dir(cwd, from)?;
+        // }
+
+        for item in fs::read_dir(from)? {
+            let path = item?.file_name();
+            let path_str = path.to_str().unwrap();
+
+            if &path_str.chars().take(1).collect::<String>() == "." {
+                continue;
+            }
+
+            if &path_str.chars().take(7).collect::<String>() == "__hash_" {
+                return Err(Error::msg(format!(
+                    "File names may not start with __hash_ (this'd break change detection): {}",
+                    cwd.join(path).to_str().unwrap()
+                )));
+            }
+
+            let hash = write_files_with_wd(from_root, archive, &cwd.join(path))?;
+
+            hasher.write_u64(hash);
         }
+    } else if from.is_file() {
+        archive.append_file(cwd, &mut File::open(from)?)?;
 
-        println!("Copying, hashing, and compressing files");
-
-        let archive_file = File::create(&new_backup_path)?;
-
-        let mut encoder = GzEncoder::new(archive_file, Compression::best());
-
-        make_backup(mc_dir, &mut encoder, backups, args.name)?;
-
-        encoder.finish()?;
-
-        println!("Backup completed");
-
-        Ok(())
+        hasher.write(&fs::read(from)?)
+    } else {
+        panic!(
+            "Found a path that is neither a directory nor a file: {:?}",
+            from
+        )
     }
+
+    let hash = hasher.finish();
+
+    let mut tmp_file = TempFile::new()?;
+    tmp_file.write(&hash.to_le_bytes())?;
+
+    if let Some(parent) = cwd.parent() {
+        archive.append_file(
+            parent.join(format!(
+                "__hash_{}",
+                cwd.file_name().unwrap().to_str().unwrap()
+            )),
+            &mut File::open(tmp_file)?,
+        )?;
+    }
+
+    Ok(hash)
 }
 
-fn make_backup(
-    mc_dir: PathBuf,
-    encoder: &mut impl Write,
-    backups_dir: BackupsFolder,
-    name: String,
-) -> Result<Backup> {
-    let mut archive = Builder::new(encoder);
-    let backup = Backup::create(&mc_dir, &mut archive, backups_dir, name)?;
-    archive.finish()?;
-    Ok(backup)
-}
+// pub struct BackupIterator {
+//     current_backup_data: BackupData,
+// }
+
+// impl BackupIterator {
+//     fn new(backup: BackupData) -> BackupIterator {
+//         BackupIterator {
+//             current_backup_data: backup,
+//         }
+//     }
+// }
+
+// impl Iterator for BackupIterator {
+//     type Item = Result<Backup>;
+// }
