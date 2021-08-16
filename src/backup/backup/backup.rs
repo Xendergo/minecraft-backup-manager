@@ -17,9 +17,9 @@ use tar::Archive;
 use tar::Builder;
 
 #[derive(Serialize, Deserialize, Debug)]
-struct BackupData {
-    previous: Option<PathBuf>,
-    current: PathBuf,
+pub struct BackupData {
+    pub previous: Option<PathBuf>,
+    pub current: PathBuf,
 }
 
 pub struct Backup {
@@ -74,6 +74,10 @@ impl Backup {
         Ok(Archive::new(GzDecoder::new(File::open(
             self.data.current.clone(),
         )?)))
+    }
+
+    pub fn get_data(&self) -> &BackupData {
+        &self.data
     }
 
     // pub fn backup_iterator(&self) -> BackupIterator {}
