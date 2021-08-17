@@ -4,12 +4,7 @@ use crate::Command;
 use anyhow::{Error, Result};
 use chrono::{Datelike, Timelike, Utc};
 use clap::ArgMatches;
-use flate2::write::GzEncoder;
-use flate2::Compression;
-use std::fs::File;
-use std::io::Write;
 use std::path::PathBuf;
-use tar::Builder;
 
 pub struct BackupCommand();
 
@@ -43,7 +38,7 @@ impl Command<'_> for BackupCommand {
                         t.second()
                     )
                 }
-            } + ".tar.gz",
+            },
             backup_type: match args.value_of("type") {
                 Some("full") => BackupType::Full,
                 Some("partial") => BackupType::Partial,
@@ -55,7 +50,6 @@ impl Command<'_> for BackupCommand {
     fn run_command(args: Self::ArgsType) -> Result<()> {
         let backups = BackupsFolder::get()?;
         let backups_dir = backups.dir();
-        let new_backup_path = backups_dir.join(&args.name);
         let mc_dir = backups_dir.parent().unwrap().to_path_buf();
 
         println!("Storing the backup in {}", &args.name);
@@ -66,13 +60,7 @@ impl Command<'_> for BackupCommand {
 
         println!("Copying, hashing, and compressing files");
 
-        let archive_file = File::create(&new_backup_path)?;
-
-        let mut encoder = GzEncoder::new(archive_file, Compression::best());
-
-        make_backup(mc_dir, &mut encoder, backups, args.name)?;
-
-        encoder.finish()?;
+        make_backup(mc_dir, backups, args.name)?;
 
         println!("Backup completed");
 
@@ -80,14 +68,7 @@ impl Command<'_> for BackupCommand {
     }
 }
 
-fn make_backup(
-    mc_dir: PathBuf,
-    encoder: &mut impl Write,
-    backups_dir: BackupsFolder,
-    name: String,
-) -> Result<Backup> {
-    let mut archive = Builder::new(encoder);
-    let backup = Backup::create(&mc_dir, &mut archive, backups_dir, name)?;
-    archive.finish()?;
+fn make_backup(mc_dir: PathBuf, backups_dir: BackupsFolder, name: String) -> Result<Backup> {
+    let backup = Backup::create(&mc_dir, backups_dir, name)?;
     Ok(backup)
 }
