@@ -58,8 +58,8 @@ pub fn write_files_with_wd(
 
     let hash = hasher.finish();
 
-    let mut tmp_file = TempFile::new()?;
-    tmp_file.write(&hash.to_le_bytes())?;
+    let mut tmp_file = TempFile::new();
+    tmp_file.get_writeonly()?.write(&hash.to_le_bytes())?;
 
     if let Some(parent) = cwd.parent() {
         archive.append_file(
@@ -67,7 +67,7 @@ pub fn write_files_with_wd(
                 "__hash_{}",
                 cwd.file_name().unwrap().to_str().unwrap()
             )),
-            &mut File::open(tmp_file)?,
+            &mut tmp_file.get_readonly()?,
         )?;
     }
 

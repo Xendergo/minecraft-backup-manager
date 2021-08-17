@@ -1,5 +1,3 @@
-use core::ops::Deref;
-use core::ops::DerefMut;
 use std::fs;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -8,12 +6,11 @@ use std::path::Path;
 use std::path::PathBuf;
 
 pub struct TempFile {
-    file: File,
     dir: PathBuf,
 }
 
 impl TempFile {
-    pub fn new() -> io::Result<TempFile> {
+    pub fn new() -> TempFile {
         use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
         use std::env;
 
@@ -27,21 +24,25 @@ impl TempFile {
             let temp_file = env::temp_dir().join(format!("__minecraft_backup_tmp_file_{}", random));
 
             if !temp_file.exists() {
+                OpenOptions::new()
+                    .read(true)
+                    .create_new(true)
+                    .truncate(true)
+                    .open(&temp_file)
+                    .expect("Couldn't create the temporary file");
                 break temp_file;
             }
         };
 
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create_new(true)
-            .truncate(true)
-            .open(&temp_file)?;
+        TempFile { dir: temp_file }
+    }
 
-        Ok(TempFile {
-            dir: temp_file,
-            file: file,
-        })
+    pub fn get_readonly(&self) -> io::Result<File> {
+        File::open(&self.dir)
+    }
+
+    pub fn get_writeonly(&mut self) -> io::Result<File> {
+        OpenOptions::new().write(true).open(&self.dir)
     }
 }
 
@@ -55,19 +56,5 @@ impl Drop for TempFile {
 impl AsRef<Path> for TempFile {
     fn as_ref(&self) -> &Path {
         &self.dir
-    }
-}
-
-impl Deref for TempFile {
-    type Target = File;
-
-    fn deref(&self) -> &File {
-        &self.file
-    }
-}
-
-impl DerefMut for TempFile {
-    fn deref_mut(&mut self) -> &mut File {
-        &mut self.file
     }
 }
