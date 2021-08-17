@@ -1,7 +1,9 @@
 use super::backup_writer::write_files_with_wd;
+use crate::backup::backup::backup_reader::BackupReader;
 use crate::backup::backup::backup_writer::BackupWriter;
 use crate::backup::BackupArgs;
 use crate::utils::BackupsFolder;
+use crate::utils::Lazy;
 use anyhow::Result;
 use quartz_nbt::io::Flavor;
 use quartz_nbt::serde::serialize;
@@ -18,11 +20,16 @@ pub struct BackupData {
 
 pub struct Backup {
     data: BackupData,
+    reader: Lazy<Result<BackupReader>, Box<dyn FnOnce() -> Result<BackupReader>>>,
 }
 
 impl Backup {
     fn new(data: BackupData) -> Backup {
-        Backup { data: data }
+        let current = data.current.clone();
+        Backup {
+            data: data,
+            reader: Lazy::new(Box::new(|| BackupReader::new(current))),
+        }
     }
 
     pub fn create(from: &PathBuf, backups_dir: BackupsFolder, args: &BackupArgs) -> Result<Backup> {
@@ -61,11 +68,9 @@ impl Backup {
     //     Ok(Backup::new(v.0))
     // }
 
-    // pub fn get_reader(&self) -> Result<Archive<GzDecoder<File>>> {
-    //     Ok(Archive::new(GzDecoder::new(File::open(
-    //         self.data.current.clone(),
-    //     )?)))
-    // }
+    pub fn get_reader(&self) -> &Result<BackupReader> {
+        Lazy::force(&self.reader)
+    }
 
     pub fn get_data(&self) -> &BackupData {
         &self.data

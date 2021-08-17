@@ -57,7 +57,7 @@ impl Command<'_> for BackupCommand {
             return Err(Error::msg("A backup with this name already exists"));
         }
 
-        println!("Copying, hashing, and compressing files");
+        println!("Copying and compressing files");
 
         Backup::create(&mc_dir, backups, &args)?;
 

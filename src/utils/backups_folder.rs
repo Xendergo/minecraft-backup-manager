@@ -1,7 +1,10 @@
 use anyhow::Error;
 use anyhow::Result;
+use core::ops::Deref;
 use std::env::current_dir;
+use std::ffi::OsStr;
 use std::fs;
+use std::fs::DirEntry;
 use std::fs::File;
 use std::io;
 use std::io::Read;
@@ -62,10 +65,29 @@ impl BackupsFolder {
 
         Ok(())
     }
+
+    pub fn all_backups(&self) -> io::Result<Box<dyn Iterator<Item = DirEntry>>> {
+        Ok(Box::new(
+            fs::read_dir(self.dir())?
+                .filter(|file| match file {
+                    Ok(v) => v.path().extension() == Some(OsStr::new(".zip")),
+                    Err(_) => false,
+                })
+                .map(|v| v.unwrap()),
+        ))
+    }
 }
 
 impl AsRef<Path> for BackupsFolder {
     fn as_ref(&self) -> &Path {
+        &self.dir
+    }
+}
+
+impl Deref for BackupsFolder {
+    type Target = PathBuf;
+
+    fn deref(&self) -> &PathBuf {
         &self.dir
     }
 }

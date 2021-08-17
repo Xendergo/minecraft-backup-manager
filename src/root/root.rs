@@ -1,4 +1,5 @@
 use crate::backup::BackupCommand;
+use crate::backup::RestoreCommand;
 use crate::run_command;
 use crate::subcommand::Command;
 use anyhow::Result;
@@ -26,6 +27,7 @@ impl<'a> Command<'a> for Root {
     fn run_command(args: Self::ArgsType) -> Result<()> {
         match &args.name[..] {
             "backup" => run_command::<BackupCommand>(args.matches)?,
+            "restore" => run_command::<RestoreCommand>(args.matches)?,
             _ => unreachable!(),
         };
 
