@@ -37,7 +37,7 @@ impl Command<'_> for BackupCommand {
                         t.second()
                     )
                 }
-            },
+            } + ".zip",
             backup_type: match args.value_of("type") {
                 Some("full") => BackupType::Full,
                 Some("partial") => BackupType::Partial,

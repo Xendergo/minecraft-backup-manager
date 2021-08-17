@@ -43,7 +43,7 @@ impl BackupWriter {
 
         self.backup
             .start_file(dir.to_str().unwrap(), FileOptions::default())?;
-        self.backup.write_all(&mut data[..]);
+        self.backup.write_all(&mut data[..])?;
 
         Ok(())
     }
@@ -52,7 +52,7 @@ impl BackupWriter {
         let dir = self.out_dir(source)?;
 
         self.backup
-            .add_directory(dir.to_str().unwrap(), FileOptions::default());
+            .add_directory(dir.to_str().unwrap(), FileOptions::default())?;
 
         Ok(())
     }
@@ -63,7 +63,7 @@ impl BackupWriter {
         data.read_to_end(&mut data_buf)?;
 
         self.backup
-            .start_file(dir.to_str().unwrap(), FileOptions::default());
+            .start_file(dir.to_str().unwrap(), FileOptions::default())?;
         self.backup.write_all(&data_buf[..])?;
 
         Ok(())
