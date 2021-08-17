@@ -53,7 +53,7 @@ impl BackupsFolder {
         })
     }
 
-    pub fn set_current_backup(&self, name: String) -> Result<()> {
+    pub fn set_current_backup(&self, name: &str) -> Result<()> {
         let current_backup_file = self.dir.join(".current");
 
         let mut file = File::create(current_backup_file)?;

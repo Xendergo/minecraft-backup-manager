@@ -2,7 +2,6 @@ use anyhow::Error;
 use anyhow::Result;
 use flate2::write::GzEncoder;
 use flate2::Compression;
-use std::ffi::OsStr;
 use std::fs;
 use std::fs::File;
 use std::io::Read;

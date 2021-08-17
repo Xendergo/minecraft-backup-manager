@@ -4,18 +4,17 @@ use crate::Command;
 use anyhow::{Error, Result};
 use chrono::{Datelike, Timelike, Utc};
 use clap::ArgMatches;
-use std::path::PathBuf;
 
 pub struct BackupCommand();
 
-enum BackupType {
+pub enum BackupType {
     Full,
     Partial,
 }
 
 pub struct BackupArgs {
-    name: String,
-    backup_type: BackupType,
+    pub name: String,
+    pub backup_type: BackupType,
 }
 
 impl Command<'_> for BackupCommand {
@@ -60,15 +59,10 @@ impl Command<'_> for BackupCommand {
 
         println!("Copying, hashing, and compressing files");
 
-        make_backup(mc_dir, backups, args.name)?;
+        Backup::create(&mc_dir, backups, &args)?;
 
         println!("Backup completed");
 
         Ok(())
     }
-}
-
-fn make_backup(mc_dir: PathBuf, backups_dir: BackupsFolder, name: String) -> Result<Backup> {
-    let backup = Backup::create(&mc_dir, backups_dir, name)?;
-    Ok(backup)
 }

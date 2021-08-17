@@ -1,5 +1,6 @@
 use super::backup_writer::write_files_with_wd;
 use crate::backup::backup::backup_writer::BackupWriter;
+use crate::backup::BackupArgs;
 use crate::utils::BackupsFolder;
 use anyhow::Result;
 use quartz_nbt::io::Flavor;
@@ -24,17 +25,17 @@ impl Backup {
         Backup { data: data }
     }
 
-    pub fn create(from: &PathBuf, backups_dir: BackupsFolder, name: String) -> Result<Backup> {
+    pub fn create(from: &PathBuf, backups_dir: BackupsFolder, args: &BackupArgs) -> Result<Backup> {
         let prev = backups_dir.current_backup()?;
 
         let data = BackupData {
             previous: prev,
-            current: backups_dir.dir().join(&name),
+            current: backups_dir.dir().join(&args.name),
         };
 
-        let backup_writer = BackupWriter::new(&from, &backups_dir, &name);
+        let backup_writer = BackupWriter::new(&from, &backups_dir, &args.name);
 
-        backups_dir.set_current_backup(name)?;
+        backups_dir.set_current_backup(&args.name)?;
 
         write_files_with_wd(&backup_writer, from)?;
 
