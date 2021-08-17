@@ -1,16 +1,16 @@
 use anyhow::Error;
 use anyhow::Result;
-use flate2::write::GzEncoder;
-use flate2::Compression;
 use std::fs;
 use std::fs::File;
 use std::io::Read;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use zip::write::FileOptions;
+use zip::ZipWriter;
 
 pub struct BackupWriter {
-    backup_dir: PathBuf,
+    backup: ZipWriter<File>,
     source_dir: PathBuf,
 }
 
@@ -19,65 +19,58 @@ impl BackupWriter {
         source_dir: &dyn AsRef<Path>,
         backups_dir: &dyn AsRef<Path>,
         name: &str,
-    ) -> BackupWriter {
-        BackupWriter {
+    ) -> Result<BackupWriter> {
+        let file = backups_dir.as_ref().to_path_buf().join(name);
+        Ok(BackupWriter {
             source_dir: source_dir.as_ref().to_path_buf(),
-            backup_dir: backups_dir.as_ref().to_path_buf().join(name),
-        }
-    }
-
-    fn create_writer(&self, source: &dyn AsRef<Path>) -> Result<Box<dyn Write>> {
-        let mut dir = self.out_dir(source)?;
-        let mut new_name = dir.file_name().unwrap().to_string_lossy().into_owned();
-
-        new_name.push_str(".gz");
-
-        dir.set_file_name(new_name);
-        Ok(Box::new(GzEncoder::new(
-            File::create(dir)?,
-            Compression::fast(),
-        )))
+            backup: ZipWriter::new(File::create(file)?),
+        })
     }
 
     fn out_dir(&self, source: &dyn AsRef<Path>) -> Result<PathBuf> {
-        Ok(self.backup_dir.join(
-            source
-                .as_ref()
-                .to_path_buf()
-                .strip_prefix(&self.source_dir)?,
-        ))
+        Ok(source
+            .as_ref()
+            .to_path_buf()
+            .strip_prefix(&self.source_dir)?
+            .to_path_buf())
     }
 
-    pub fn add_file(&self, source: &dyn AsRef<Path>) -> Result<()> {
-        let mut encoder = self.create_writer(source)?;
+    pub fn add_file(&mut self, source: &dyn AsRef<Path>) -> Result<()> {
+        let dir = self.out_dir(source)?;
 
         let mut data = Vec::new();
         File::open(source)?.read_to_end(&mut data)?;
 
-        encoder.write_all(&data[..])?;
+        self.backup
+            .start_file(dir.to_str().unwrap(), FileOptions::default())?;
+        self.backup.write_all(&mut data[..]);
 
         Ok(())
     }
 
-    pub fn add_directory(&self, source: &dyn AsRef<Path>) -> Result<()> {
-        fs::create_dir(self.out_dir(source)?)?;
+    pub fn add_directory(&mut self, source: &dyn AsRef<Path>) -> Result<()> {
+        let dir = self.out_dir(source)?;
+
+        self.backup
+            .add_directory(dir.to_str().unwrap(), FileOptions::default());
 
         Ok(())
     }
 
-    pub fn add_new_file(&self, source: &dyn AsRef<Path>, data: &mut dyn Read) -> Result<()> {
-        let mut encoder = self.create_writer(source)?;
-
+    pub fn add_new_file(&mut self, source: &dyn AsRef<Path>, data: &mut dyn Read) -> Result<()> {
+        let dir = self.out_dir(source)?;
         let mut data_buf = Vec::new();
         data.read_to_end(&mut data_buf)?;
 
-        encoder.write_all(&data_buf[..])?;
+        self.backup
+            .start_file(dir.to_str().unwrap(), FileOptions::default());
+        self.backup.write_all(&data_buf[..])?;
 
         Ok(())
     }
 }
 
-pub fn write_files_with_wd(writer: &BackupWriter, from_trait: &dyn AsRef<Path>) -> Result<()> {
+pub fn write_files_with_wd(writer: &mut BackupWriter, from_trait: &dyn AsRef<Path>) -> Result<()> {
     let from = from_trait.as_ref().to_path_buf();
 
     if from.is_dir() {

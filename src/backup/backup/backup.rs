@@ -33,11 +33,11 @@ impl Backup {
             current: backups_dir.dir().join(&args.name),
         };
 
-        let backup_writer = BackupWriter::new(&from, &backups_dir, &args.name);
+        let mut backup_writer = BackupWriter::new(&from, &backups_dir, &args.name)?;
 
         backups_dir.set_current_backup(&args.name)?;
 
-        write_files_with_wd(&backup_writer, from)?;
+        write_files_with_wd(&mut backup_writer, from)?;
 
         backup_writer.add_new_file(
             &from.join("archive_data.nbt"),
