@@ -44,7 +44,7 @@ impl Command<'_> for RestoreCommand {
     }
 
     fn run_command(args: Self::ArgsType) -> Result<()> {
-        let mut backup = BackupReader::new(args.path)?;
+        let mut backup = BackupReader::new(args.path)?.unwrap();
         let backups_folder = BackupsFolder::get()?;
         let folder_to_restore_to = backups_folder.parent().unwrap();
 
@@ -72,7 +72,7 @@ impl Command<'_> for RestoreCommand {
         println!("Restoring backup");
 
         for file_name in file_names {
-            let mut file = backup.get_file(&file_name)?;
+            let mut file = backup.get_file(&file_name).unwrap();
 
             let path = folder_to_restore_to.join(&file_name);
 

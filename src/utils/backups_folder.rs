@@ -12,6 +12,8 @@ use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
+use super::option_open;
+
 pub struct BackupsFolder {
     dir: PathBuf,
 }
@@ -47,7 +49,7 @@ impl BackupsFolder {
         }
 
         let mut current_backup: String = String::default();
-        File::open(current_backup_file)?.read_to_string(&mut current_backup)?;
+        option_open(current_backup_file)?.unwrap().read_to_string(&mut current_backup)?;
 
         Ok(if self.dir.join(&current_backup).is_file() {
             Some(self.dir.join(&current_backup))

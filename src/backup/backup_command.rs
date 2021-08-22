@@ -7,6 +7,7 @@ use clap::ArgMatches;
 
 pub struct BackupCommand();
 
+#[derive(Debug, Clone, Copy)]
 pub enum BackupType {
     Full,
     Partial,
